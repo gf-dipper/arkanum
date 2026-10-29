@@ -883,6 +883,38 @@ html, body, #app, #scr-game { overflow: hidden; overflow: clip; }
   #scr-game .bar .tools .iconbtn span { display: none; }
   #scr-game .tablewrap { padding-top: 10px; }
 }
+
+@media (min-width: 1100px) {
+  .lobby-wrap { max-width: 1320px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: start; column-gap: 22px; row-gap: 16px; padding-block: 16px; align-content: center; min-height: 100%; box-sizing: border-box; }
+  .lobby-wrap > * { grid-column: 1; }
+  .lobby-wrap > .lob-set { grid-column: 2; grid-row: 1 / span 3; }
+  .lobby-wrap > .lob-set > .panel { gap: 13px; }
+}
+@media (min-width: 1100px) and (max-height: 900px) {
+  .roomcode { padding: 16px 20px; gap: 8px; }
+  .lobby-wrap .panel { padding: 16px 20px; gap: 11px; }
+}
+/* ---------- főmenü: elférjen egy képernyőn; teljes képernyő ---------- */
+input[type=text] { box-sizing: border-box; }
+.panel h2 + .toggles { margin-top: 2px; }
+.fsbtn[hidden] { display: none !important; }
+@media (min-width: 1100px) {
+  .menu-wrap { max-width: 1400px; padding-block: 10px 14px; gap: 14px; }
+  .panels { grid-template-columns: 1fr 1.1fr 1fr; gap: 18px; }
+}
+@media (min-width: 1100px) and (max-height: 1050px) {
+  .fan-hero { height: clamp(92px, 15vh, 160px); }
+  .fan-hero .card { --cw: clamp(62px, 9.5vh, 104px); }
+  .logo h1 { font-size: clamp(46px, 8.5vh, 96px); }
+  .logo .tagline { font-size: 16px; }
+  .panel { padding: 18px 22px; gap: 13px; }
+  .toggles { gap: 11px; }
+  .toggle small { font-size: 13.5px; }
+}
+@media (min-width: 1100px) and (max-height: 760px) {
+  .logo .divider, .logo .tagline { display: none; }
+  .toggle small { font-size: 13px; line-height: 1.3; }
+}
 </style><div id="app">
   <canvas id="motes" aria-hidden="true"></canvas>
   <section id="scr-menu" class="screen"></section>
@@ -894,6 +926,7 @@ html, body, #app, #scr-game { overflow: hidden; overflow: clip; }
       <div class="tools">
         <button class="iconbtn" id="btn-scores" type="button" title="Pontok"><svg viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M12 13v4M8 21h8M9 17h6"/></svg><span>Pontok</span></button>
         <button class="iconbtn" id="btn-rules" type="button" title="Szabályok"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6"/></svg><span>Szabály</span></button>
+        <button class="iconbtn fsbtn" data-fs type="button" title="Teljes képernyő" hidden><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span class="fslbl">Teljes képernyő</span></button>
         <button class="iconbtn" id="btn-menu" type="button" title="Főmenü"><svg viewBox="0 0 24 24"><path d="M14 4h5v16h-5M10 16l-4-4 4-4M6 12h11"/></svg><span>Menü</span></button>
       </div>
     </header>
@@ -2214,7 +2247,10 @@ firebase/app/dist/esm/index.esm.js:
     if (!AC) return null;
     try { ctx = new AC(); } catch (e) { return null; }
     master = ctx.createGain(); master.gain.value = opts.vol; master.connect(ctx.destination);
-    sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(master);
+    sfxBus = ctx.createGain(); sfxBus.gain.value = 0.55;
+    var sfxLp = ctx.createBiquadFilter(); sfxLp.type = 'lowpass'; sfxLp.frequency.value = 3800; sfxLp.Q.value = 0.5;
+    var sfxComp = ctx.createDynamicsCompressor(); sfxComp.threshold.value = -22; sfxComp.knee.value = 12; sfxComp.ratio.value = 4; sfxComp.attack.value = 0.004; sfxComp.release.value = 0.2;
+    sfxBus.connect(sfxLp); sfxLp.connect(sfxComp); sfxComp.connect(master);
     musicBus = ctx.createGain(); musicBus.gain.value = 0; musicBus.connect(master);
     // egyszerű zengető: zajból készített lecsengés
     verb = ctx.createConvolver();
@@ -2236,7 +2272,9 @@ firebase/app/dist/esm/index.esm.js:
 
   function noiseBuf(dur) {
     var n = Math.floor(ctx.sampleRate * dur), b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0);
-    for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    // rózsaszínes zaj: kevesebb sziszegés, mint a fehér zajnál
+    var l = 0;
+    for (var i = 0; i < n; i++) { l = l * 0.86 + (Math.random() * 2 - 1) * 0.14; d[i] = l * 3; }
     return b;
   }
   function env(g, t, a, peak, dec) {
@@ -2244,56 +2282,61 @@ firebase/app/dist/esm/index.esm.js:
     g.gain.exponentialRampToValueAtTime(peak, t + a);
     g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec);
   }
-  function tone(freq, t, dur, type, peak, dest, verbAmt) {
-    var o = ctx.createOscillator(), g = ctx.createGain();
+  // lágy hang: nincs kattanó felfutás, a felhangokat aluláteresztő szűrő tompítja
+  function tone(freq, t, dur, type, peak, dest, verbAmt, att) {
+    var o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
     o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
-    env(g, t, 0.006, peak || 0.2, dur);
-    o.connect(g); g.connect(dest || sfxBus);
+    lp.type = 'lowpass'; lp.frequency.value = Math.min(2400, freq * 2.2); lp.Q.value = 0.5;
+    env(g, t, att || 0.018, peak || 0.2, dur);
+    o.connect(lp); lp.connect(g); g.connect(dest || sfxBus);
     if (verbAmt) { var vg = ctx.createGain(); vg.gain.value = verbAmt; g.connect(vg); vg.connect(verb); }
-    o.start(t); o.stop(t + dur + 0.05);
+    o.start(t); o.stop(t + dur + 0.1);
   }
+  // meleg, fa-/üvegharang-szerű hang: alaphang + halk oktáv
   function bell(freq, t, peak, dur) {
-    tone(freq, t, dur || 1.2, 'sine', peak || 0.16, null, 0.5);
-    tone(freq * 2.01, t, (dur || 1.2) * 0.5, 'sine', (peak || 0.16) * 0.35, null, 0.4);
-    tone(freq * 3.02, t, (dur || 1.2) * 0.25, 'sine', (peak || 0.16) * 0.15);
+    var d = dur || 1.1, pk = peak || 0.12;
+    tone(freq, t, d, 'sine', pk, null, 0.35, 0.02);
+    tone(freq * 2, t, d * 0.35, 'sine', pk * 0.18, null, 0.2, 0.02);
   }
+  // lap a posztón: tompa koppanás, kevés sziszegés
   function cardSnap(t, vol) {
-    var s = ctx.createBufferSource(); s.buffer = noiseBuf(0.12);
-    var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 0.9;
-    var g = ctx.createGain(); env(g, t, 0.003, 0.5 * (vol || 1), 0.08);
-    s.connect(bp); bp.connect(g); g.connect(sfxBus); s.start(t);
+    var v = vol || 1;
+    var s = ctx.createBufferSource(); s.buffer = noiseBuf(0.1);
+    var lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1300; lp.Q.value = 0.4;
+    var g = ctx.createGain(); env(g, t, 0.006, 0.28 * v, 0.07);
+    s.connect(lp); lp.connect(g); g.connect(sfxBus); s.start(t);
     var o = ctx.createOscillator(), g2 = ctx.createGain();
-    o.type = 'sine'; o.frequency.setValueAtTime(190, t); o.frequency.exponentialRampToValueAtTime(70, t + 0.08);
-    env(g2, t, 0.003, 0.22 * (vol || 1), 0.09);
-    o.connect(g2); g2.connect(sfxBus); o.start(t); o.stop(t + 0.15);
+    o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(65, t + 0.09);
+    env(g2, t, 0.005, 0.2 * v, 0.1);
+    o.connect(g2); g2.connect(sfxBus); o.start(t); o.stop(t + 0.18);
   }
   function whoosh(t) {
     var s = ctx.createBufferSource(); s.buffer = noiseBuf(0.5);
-    var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.4;
-    bp.frequency.setValueAtTime(400, t); bp.frequency.exponentialRampToValueAtTime(3200, t + 0.35);
-    var g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.15); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.8;
+    bp.frequency.setValueAtTime(220, t); bp.frequency.exponentialRampToValueAtTime(1100, t + 0.35);
+    var g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.16); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.48);
     s.connect(bp); bp.connect(g); g.connect(sfxBus); g.connect(verb); s.start(t);
   }
 
-  var N = { C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392, A4: 440, Bb4: 466.16, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880, C6: 1046.5, D6: 1174.7 };
+  var N = { C3: 130.81, D3: 146.83, F3: 174.61, A3: 220, C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392, A4: 440, Bb4: 466.16, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880, C6: 1046.5, D6: 1174.7 };
 
   var SFX = {
     card: function (t) { cardSnap(t, 1); },
-    deal: function (t, n) { for (var i = 0; i < Math.min(n || 5, 12); i++) cardSnap(t + i * 0.075, 0.55); },
-    flip: function (t) { whoosh(t); bell(N.A5, t + 0.28, 0.07, 1.4); },
-    coin: function (t) { tone(1318, t, 0.25, 'sine', 0.12, null, 0.25); tone(1975, t + 0.05, 0.35, 'sine', 0.09, null, 0.3); },
-    turn: function (t) { bell(N.E5, t, 0.08, 0.8); bell(N.A5, t + 0.11, 0.07, 0.9); },
-    mine: function (t) { bell(N.C5, t, 0.12); bell(N.E5, t + 0.09, 0.12); bell(N.G5, t + 0.18, 0.13, 1.6); },
-    trick: function (t) { bell(N.D5, t, 0.06, 0.9); },
-    good: function (t) { [N.D5, N.F5, N.A5, N.D6].forEach(function (f, i) { bell(f, t + i * 0.1, 0.12, 1.4); }); },
-    bad: function (t) { tone(N.A4, t, 0.5, 'triangle', 0.1, null, 0.3); tone(N.F4, t + 0.22, 0.9, 'triangle', 0.1, null, 0.4); },
+    deal: function (t, n) { for (var i = 0; i < Math.min(n || 5, 12); i++) cardSnap(t + i * 0.075, 0.5); },
+    flip: function (t) { whoosh(t); bell(N.A4, t + 0.28, 0.06, 1.3); },
+    coin: function (t) { tone(N.E5, t, 0.22, 'sine', 0.06, null, 0.2, 0.01); tone(N.A5 * 0.75, t + 0.05, 0.3, 'sine', 0.045, null, 0.25, 0.012); },
+    turn: function (t) { bell(N.E4, t, 0.07, 0.8); bell(N.A4, t + 0.12, 0.06, 0.9); },
+    mine: function (t) { bell(N.C4, t, 0.09); bell(N.E4, t + 0.1, 0.09); bell(N.G4, t + 0.2, 0.1, 1.5); },
+    trick: function (t) { bell(N.D4, t, 0.06, 0.8); },
+    good: function (t) { [N.D4, N.F4, N.A4, N.D5].forEach(function (f, i) { bell(f, t + i * 0.11, 0.09, 1.3); }); },
+    bad: function (t) { tone(N.A3, t, 0.5, 'triangle', 0.08, null, 0.3, 0.03); tone(N.F3, t + 0.22, 0.9, 'triangle', 0.08, null, 0.4, 0.03); },
     victory: function (t) {
-      [N.D5, N.F5, N.A5].forEach(function (f, i) { bell(f, t + i * 0.12, 0.12, 1.6); });
-      [N.D4, N.A4, N.D5, N.F5].forEach(function (f) { tone(f, t + 0.45, 2.4, 'triangle', 0.05, null, 0.6); });
-      bell(N.D6, t + 0.5, 0.1, 2.2);
+      [N.D4, N.F4, N.A4].forEach(function (f, i) { bell(f, t + i * 0.13, 0.1, 1.6); });
+      [N.D3, N.A3, N.D4, N.F4].forEach(function (f) { tone(f, t + 0.45, 2.4, 'triangle', 0.045, null, 0.5, 0.25); });
+      bell(N.D5, t + 0.55, 0.07, 2.0);
     },
-    emote: function (t) { tone(880, t, 0.12, 'sine', 0.06); tone(1320, t + 0.06, 0.18, 'sine', 0.05); },
-    click: function (t) { tone(2200, t, 0.04, 'sine', 0.04); }
+    emote: function (t) { tone(N.A4, t, 0.14, 'sine', 0.05); tone(N.E5, t + 0.07, 0.2, 'sine', 0.04); },
+    click: function (t) { tone(N.A4, t, 0.05, 'sine', 0.025, null, 0, 0.006); }
   };
 
   function play(name, arg) {
@@ -2464,10 +2507,11 @@ firebase/app/dist/esm/index.esm.js:
       [2, 3, 4, 5].map(function (n) { return '<button type="button" data-v="' + n + '" aria-pressed="' + (prefs.opp === n) + '">' + n + '</button>'; }).join('') + '</div></div>' +
       levelSeg('lvl') +
       '<div class="row"><span class="rlabel">Játék hossza</span><div class="seg" id="len"><button type="button" data-v="0" aria-pressed="' + !prefs.short + '">Teljes</button><button type="button" data-v="1" aria-pressed="' + !!prefs.short + '">Rövid</button></div></div>' +
-      '<div class="sep">Szabályváltozatok</div>' +
-      variantToggles('m', prefs) +
       '<div class="row" style="justify-content:center;padding-top:4px"><button class="btn gold big" id="go-local" type="button">Új játék</button>' +
       (saved ? '<button class="btn big" id="go-resume" type="button">Folytatás · ' + saved.G.round + '. kör</button>' : '') + '</div>' +
+      '</section>' +
+      '<section class="panel frame" aria-labelledby="h-rules"><h2 class="heading" id="h-rules">Szabályváltozatok</h2>' +
+      variantToggles('m', prefs) +
       '</section>' +
       '<section class="panel frame" aria-labelledby="h-online"><h2 class="heading" id="h-online">Online, barátokkal</h2>' +
       '<p class="hint">Nyiss egy szobát, és küldd el a négybetűs kódot a barátaidnak. Az üres helyekre gépi játékos ül, így már ketten is belevághattok.</p>' +
@@ -2479,7 +2523,8 @@ firebase/app/dist/esm/index.esm.js:
       '</section></div>' +
       '<div class="menu-foot"><button class="iconbtn" id="go-rules" type="button"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M8 7h8M8 11h6"/></svg><span>Így megy a játék</span></button>' +
       '<button class="iconbtn" id="go-stats" type="button"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Statisztika</span></button>' +
-      '<button class="iconbtn" id="go-sound" type="button">' + ICON_SOUND + '<span>Hang és zene</span></button></div>' +
+      '<button class="iconbtn" id="go-sound" type="button">' + ICON_SOUND + '<span>Hang és zene</span></button>' +
+      '<button class="iconbtn fsbtn" data-fs type="button"' + (fsOk() ? '' : ' hidden') + '><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span class="fslbl">' + fsLabel() + '</span></button></div>' +
       '</div>';
     segBind('#opp', function (v) { prefs.opp = +v; savePrefs(); });
     segBind('#len', function (v) { prefs.short = v === '1'; savePrefs(); });
@@ -3799,8 +3844,8 @@ firebase/app/dist/esm/index.esm.js:
       '<div class="roomcode frame"><span class="lbl">Szobakód</span><div class="tiles">' + net.code.split('').map(function (ch) { return '<span>' + esc(ch) + '</span>'; }).join('') + '</div>' +
       (isHost ? '<p class="hint">Küldd el ezt a kódot a barátaidnak. Ha valaki csatlakozik, gépi játékos helyére ül.</p>' : '<p class="hint">' + (waiting ? 'Kapcsolódás a szobához…' : 'Várjuk, hogy ' + esc(net.hostName || 'a házigazda') + ' elindítsa a játékot.') + '</p>') + '</div>' +
       (rows ? '<section class="panel frame"><h2 class="heading">Az asztalnál</h2><div class="seatlist">' + rows + '</div></section>' : '') +
-      settings +
-      '<div class="row" style="justify-content:center"><button class="btn" type="button" id="lob-leave">Kilépés</button>' +
+      '<div class="lob-set">' + settings + '</div>' +
+      '<div class="row lob-btns" style="justify-content:center"><button class="btn" type="button" id="lob-leave">Kilépés</button>' +
       (isHost ? '<button class="btn gold big" type="button" id="lob-start">Indítás</button>' : '') + '</div></div>';
     $('#lob-leave').onclick = leaveToMenu;
     if (isHost) {
@@ -3833,11 +3878,32 @@ firebase/app/dist/esm/index.esm.js:
     requestAnimationFrame(tick);
   }
 
+  /* ---------------- teljes képernyő ---------------- */
+  function fsOk() { var d = document.documentElement; return !!(document.fullscreenEnabled || document.webkitFullscreenEnabled) && !!(d.requestFullscreen || d.webkitRequestFullscreen); }
+  function fsOn() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  function fsLabel() { return fsOn() ? 'Kilépés a teljes képernyőből' : 'Teljes képernyő'; }
+  function fsToggle() {
+    var d = document.documentElement;
+    try {
+      if (fsOn()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else { var r = (d.requestFullscreen || d.webkitRequestFullscreen).call(d); if (r && r.catch) r.catch(function () {}); }
+    } catch (e) {}
+  }
+  function fsSync() {
+    document.querySelectorAll('[data-fs]').forEach(function (b) {
+      b.hidden = !fsOk(); b.title = fsLabel();
+      var l = b.querySelector('.fslbl'); if (l) l.textContent = fsLabel();
+    });
+  }
+  document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-fs]')) fsToggle(); });
+  document.addEventListener('fullscreenchange', fsSync);
+  document.addEventListener('webkitfullscreenchange', fsSync);
+
   /* ---------------- indulás ---------------- */
   bindGame(); bindModal(); motes();
   // biztonsági háló: ha valami mégis elgörgetné az oldalt, visszaállítjuk
   window.addEventListener('scroll', function () { if (window.scrollY || window.scrollX) window.scrollTo(0, 0); });
-  renderMenu(); show('scr-menu');
+  renderMenu(); show('scr-menu'); fsSync();
   (function () {
     var qs = /[?&]szoba=([a-z0-9]{4})/i.exec(location.search);
     if (qs && $('#code')) $('#code').value = qs[1].toLowerCase();
